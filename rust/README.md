@@ -102,6 +102,13 @@ cd rust
 cargo run -p rusty-claude-cli -- --model claude-sonnet-4-20250514 prompt "List the key crates in this workspace"
 ```
 
+Restrict enabled tools in an interactive session:
+
+```bash
+cd rust
+cargo run -p rusty-claude-cli -- --allowedTools read,glob
+```
+
 ### 2) REPL mode
 
 Start the interactive shell:
@@ -123,6 +130,10 @@ Inside the REPL, useful commands include:
 /memory
 /config
 /init
+/diff
+/version
+/export notes.txt
+/session list
 /exit
 ```
 
@@ -169,6 +180,10 @@ cargo run -p rusty-claude-cli -- --resume session.json /memory /config
 - `/config [env|hooks|model]` — inspect discovered Claude config
 - `/memory` — inspect loaded instruction memory files
 - `/init` — create a starter `CLAUDE.md`
+- `/diff` — show the current git diff for the workspace
+- `/version` — print version and build metadata locally
+- `/export [file]` — export the current conversation transcript
+- `/session [list|switch <session-id>]` — inspect or switch managed local sessions
 - `/exit` — leave the REPL
 
 ## Environment variables
