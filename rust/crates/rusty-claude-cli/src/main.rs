@@ -2058,7 +2058,17 @@ fn list_managed_sessions() -> Result<Vec<ManagedSessionSummary>, Box<dyn std::er
             .map(|duration| duration.as_secs())
             .unwrap_or_default();
         let (id, message_count, parent_session_id, branch_name) = Session::load_from_path(&path)
-            .map(|session| {
+            .map_or_else(|_| {
+                (
+                    path.file_stem()
+                        .and_then(|value| value.to_str())
+                        .unwrap_or("unknown")
+                        .to_string(),
+                    0,
+                    None,
+                    None,
+                )
+            }, |session| {
                 let parent_session_id = session
                     .fork
                     .as_ref()
@@ -2072,17 +2082,6 @@ fn list_managed_sessions() -> Result<Vec<ManagedSessionSummary>, Box<dyn std::er
                     session.messages.len(),
                     parent_session_id,
                     branch_name,
-                )
-            })
-            .unwrap_or_else(|_| {
-                (
-                    path.file_stem()
-                        .and_then(|value| value.to_str())
-                        .unwrap_or("unknown")
-                        .to_string(),
-                    0,
-                    None,
-                    None,
                 )
             });
         sessions.push(ManagedSessionSummary {
