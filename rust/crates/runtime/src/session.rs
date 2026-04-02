@@ -269,8 +269,7 @@ impl Session {
         let session_id = object
             .get("session_id")
             .and_then(JsonValue::as_str)
-            .map(ToOwned::to_owned)
-            .unwrap_or_else(generate_session_id);
+            .map_or_else(generate_session_id, ToOwned::to_owned);
         let created_at_ms = object
             .get("created_at_ms")
             .map(|value| required_u64_from_value(value, "created_at_ms"))
