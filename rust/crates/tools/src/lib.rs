@@ -127,7 +127,10 @@ impl GlobalToolRegistry {
             }
         }
 
-        Ok(Self { plugin_tools, enforcer: None })
+        Ok(Self {
+            plugin_tools,
+            enforcer: None,
+        })
     }
 
     #[must_use]
@@ -242,8 +245,23 @@ impl GlobalToolRegistry {
     }
 
     pub fn execute(&self, name: &str, input: &Value) -> Result<String, String> {
-        if let Some(enforcer) = &self.enforcer {
-            enforce_permission_check(enforcer, name, input)?;
+        self.execute_inner(name, input, true)
+    }
+
+    pub fn execute_preauthorized(&self, name: &str, input: &Value) -> Result<String, String> {
+        self.execute_inner(name, input, false)
+    }
+
+    fn execute_inner(
+        &self,
+        name: &str,
+        input: &Value,
+        enforce_permissions: bool,
+    ) -> Result<String, String> {
+        if enforce_permissions {
+            if let Some(enforcer) = &self.enforcer {
+                enforce_permission_check(enforcer, name, input)?;
+            }
         }
         if mvp_tool_specs().iter().any(|spec| spec.name == name) {
             return execute_tool(name, input);
@@ -2798,7 +2816,10 @@ struct SubagentToolExecutor {
 
 impl SubagentToolExecutor {
     fn new(allowed_tools: BTreeSet<String>) -> Self {
-        Self { allowed_tools, enforcer: None }
+        Self {
+            allowed_tools,
+            enforcer: None,
+        }
     }
 
     fn with_enforcer(mut self, enforcer: PermissionEnforcer) -> Self {
@@ -2817,8 +2838,7 @@ impl ToolExecutor for SubagentToolExecutor {
         let value = serde_json::from_str(input)
             .map_err(|error| ToolError::new(format!("invalid tool input JSON: {error}")))?;
         if let Some(enforcer) = &self.enforcer {
-            enforce_permission_check(enforcer, tool_name, &value)
-                .map_err(ToolError::new)?;
+            enforce_permission_check(enforcer, tool_name, &value).map_err(ToolError::new)?;
         }
         execute_tool(tool_name, &value).map_err(ToolError::new)
     }
@@ -4219,8 +4239,8 @@ mod tests {
     use super::{
         agent_permission_policy, allowed_tools_for_subagent, execute_agent_with_spawn,
         execute_tool, final_assistant_text, mvp_tool_specs, permission_mode_from_plugin,
-        persist_agent_terminal_state, push_output_block, AgentInput, AgentJob,
-        GlobalToolRegistry, SubagentToolExecutor,
+        persist_agent_terminal_state, push_output_block, AgentInput, AgentJob, GlobalToolRegistry,
+        SubagentToolExecutor,
     };
     use api::OutputContentBlock;
     use runtime::{
@@ -4243,10 +4263,11 @@ mod tests {
     }
 
     fn permission_policy_for_mode(mode: PermissionMode) -> PermissionPolicy {
-        mvp_tool_specs().into_iter().fold(
-            PermissionPolicy::new(mode),
-            |policy, spec| policy.with_tool_requirement(spec.name, spec.required_permission),
-        )
+        mvp_tool_specs()
+            .into_iter()
+            .fold(PermissionPolicy::new(mode), |policy, spec| {
+                policy.with_tool_requirement(spec.name, spec.required_permission)
+            })
     }
 
     #[test]
@@ -4321,7 +4342,9 @@ mod tests {
             .expect_err("subagent write tool should be denied before dispatch");
 
         // then
-        assert!(error.to_string().contains("requires workspace-write permission"));
+        assert!(error
+            .to_string()
+            .contains("requires workspace-write permission"));
     }
 
     #[test]
@@ -5813,7 +5836,10 @@ printf 'pwsh:%s' "$1"
     fn given_read_only_enforcer_when_write_file_then_denied() {
         let registry = read_only_registry();
         let err = registry
-            .execute("write_file", &json!({ "path": "/tmp/x.txt", "content": "x" }))
+            .execute(
+                "write_file",
+                &json!({ "path": "/tmp/x.txt", "content": "x" }),
+            )
             .expect_err("write_file should be denied in read-only mode");
         assert!(
             err.contains("current mode is read-only"),
@@ -5847,10 +5873,7 @@ printf 'pwsh:%s' "$1"
         fs::write(&file, "content\n").expect("write test file");
 
         let registry = read_only_registry();
-        let result = registry.execute(
-            "read_file",
-            &json!({ "path": file.display().to_string() }),
-        );
+        let result = registry.execute("read_file", &json!({ "path": file.display().to_string() }));
         assert!(result.is_ok(), "read_file should be allowed: {result:?}");
 
         let _ = fs::remove_dir_all(root);
@@ -5872,6 +5895,16 @@ printf 'pwsh:%s' "$1"
         let result = registry
             .execute("bash", &json!({ "command": "printf 'ok'" }))
             .expect("bash should succeed without enforcer");
+        let output: serde_json::Value = serde_json::from_str(&result).expect("json");
+        assert_eq!(output["stdout"], "ok");
+    }
+
+    #[test]
+    fn given_enforcer_when_execute_preauthorized_then_skips_redundant_permission_check() {
+        let registry = read_only_registry();
+        let result = registry
+            .execute_preauthorized("bash", &json!({ "command": "printf 'ok'" }))
+            .expect("preauthorized bash should skip registry enforcement");
         let output: serde_json::Value = serde_json::from_str(&result).expect("json");
         assert_eq!(output["stdout"], "ok");
     }

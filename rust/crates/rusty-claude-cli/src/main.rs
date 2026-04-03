@@ -40,8 +40,7 @@ use plugins::{PluginHooks, PluginManager, PluginManagerConfig, PluginRegistry};
 use render::{MarkdownStreamState, Spinner, TerminalRenderer};
 use runtime::{
     clear_oauth_credentials, generate_pkce_pair, generate_state, load_system_prompt,
-    parse_oauth_callback_request_target,
-    permission_enforcer::PermissionEnforcer,
+    parse_oauth_callback_request_target, permission_enforcer::PermissionEnforcer,
     resolve_sandbox_status, save_oauth_credentials, ApiClient, ApiRequest, AssistantEvent,
     CompactionConfig, ConfigLoader, ConfigSource, ContentBlock, ConversationMessage,
     ConversationRuntime, MessageRole, OAuthAuthorizationRequest, OAuthConfig,
@@ -4976,7 +4975,7 @@ impl ToolExecutor for CliToolExecutor {
         }
         let value = serde_json::from_str(input)
             .map_err(|error| ToolError::new(format!("invalid tool input JSON: {error}")))?;
-        match self.tool_registry.execute(tool_name, &value) {
+        match self.tool_registry.execute_preauthorized(tool_name, &value) {
             Ok(output) => {
                 if self.emit_output {
                     let markdown = format_tool_result(tool_name, &output, false);
